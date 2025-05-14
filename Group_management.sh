@@ -177,9 +177,9 @@ while true; do
                     log_action "Created real user: $username"
 
                     (
-                        sleep 60
+                        sleep 500
                         sudo userdel "$username" &>/dev/null
-                        log_action "Auto-deleted real user after 1 min: $username"
+                        log_action "Auto-deleted real user after 5 min: $username"
                     ) &
                 fi
             fi
