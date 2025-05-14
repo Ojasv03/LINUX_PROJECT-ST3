@@ -1,18 +1,23 @@
 #!/bin/bash
 
+# Define project-related paths
 PROJECT_DIR="/home/$USER/Desktop/ST3 Project"
 LOG_FILE="$PROJECT_DIR/group_management.log"
 VIRTUAL_USERS="$PROJECT_DIR/virtual_users.txt"
 GROUP_MEMBERS="$PROJECT_DIR/virtual_group_memberships.txt"
 
+# Ensure required directories and files exist
 mkdir -p "$PROJECT_DIR"
 touch "$LOG_FILE" "$VIRTUAL_USERS" "$GROUP_MEMBERS"
 
+# Function to log actions with timestamp
 log_action() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') : $1" >> "$LOG_FILE"
 }
 
+# Main menu loop
 while true; do
+    # Display main menu using dialog
     choice=$(dialog --clear --backtitle "Group Management Tool" \
         --title "Main Menu" \
         --menu "Choose an option:" 20 60 9 \
@@ -26,27 +31,33 @@ while true; do
         8 "Exit" \
         3>&1 1>&2 2>&3)
 
+    # Perform action based on choice
     case $choice in
         1)
+            # View Groups with Members
             output=""
             while IFS=: read -r group _ gid members; do
                 if [ "$gid" -ge 1000 ]; then
                     output+="\nGroup: $group\n"
                     all_users="$members"
+                    # Append virtual users in the group
                     virtual_users=$(grep ":$group$" "$GROUP_MEMBERS" | cut -d: -f1 | xargs)
                     all_users="$all_users $virtual_users"
                     output+="  Users: ${all_users:-None}\n"
                 fi
             done < /etc/group
 
+            # Display message if no groups found
             if [[ -z "$output" ]]; then
                 output="No user-defined groups found."
             fi
 
+            # Show groups with members
             dialog --title "Groups with Members" --msgbox "$output" 25 80
             ;;
 
         2)
+            # Add Group
             groupname=$(dialog --inputbox "Enter new group name:" 8 40 3>&1 1>&2 2>&3)
             if [[ -z "$groupname" ]]; then
                 dialog --msgbox "Group name cannot be empty!" 6 40
@@ -60,6 +71,7 @@ while true; do
             ;;
 
         3)
+            # Delete Group
             groupname=$(dialog --inputbox "Enter group name to delete:" 8 40 3>&1 1>&2 2>&3)
             if ! getent group "$groupname" > /dev/null; then
                 dialog --msgbox "Group does not exist!" 6 40
@@ -71,6 +83,7 @@ while true; do
             ;;
 
         4)
+            # Modify Group Name
             oldgroup=$(dialog --inputbox "Enter existing group name:" 8 40 3>&1 1>&2 2>&3)
             newgroup=$(dialog --inputbox "Enter new group name:" 8 40 3>&1 1>&2 2>&3)
             if ! getent group "$oldgroup" > /dev/null; then
@@ -84,17 +97,20 @@ while true; do
             fi
             ;;
 
-                5)
+        5)
+            # Add/Remove User to/from Group
             user=$(dialog --clear --title "Add/Remove User" \
                    --inputbox "Enter username:" 8 50 3>&1 1>&2 2>&3)
             group=$(dialog --clear --title "Add/Remove User" \
                     --inputbox "Enter group name:" 8 50 3>&1 1>&2 2>&3)
 
+            # Validate user and group existence
             if ! grep -qw "$user" "$VIRTUAL_USERS" && ! id "$user" &>/dev/null; then
                 dialog --title "Error" --msgbox "User does not exist!" 6 50
             elif ! getent group "$group" > /dev/null; then
                 dialog --title "Error" --msgbox "Group does not exist!" 6 50
             else
+                # Action menu for add/remove
                 action=$(dialog --clear --title "Select Action" \
                     --menu "What would you like to do?" 10 50 2 \
                     1 "Add User to Group" \
@@ -103,6 +119,7 @@ while true; do
 
                 case $action in
                     1)
+                        # Add User to Group (Virtual or Real)
                         if grep -qw "$user" "$VIRTUAL_USERS"; then
                             if grep -qw "^$user:$group$" "$GROUP_MEMBERS"; then
                                 dialog --title "Info" --msgbox "User is already in the group." 6 50
@@ -122,6 +139,7 @@ while true; do
                         fi
                         ;;
                     2)
+                        # Remove User from Group (Virtual or Real)
                         if grep -qw "$user" "$VIRTUAL_USERS"; then
                             if grep -qw "^$user:$group$" "$GROUP_MEMBERS"; then
                                 sed -i "/^$user:$group$/d" "$GROUP_MEMBERS"
@@ -144,15 +162,15 @@ while true; do
             fi
             ;;
 
-
-
         6)
+            # View All Users (Real + Virtual)
             real_users=$(cut -d: -f1 /etc/passwd | sort)
             virtual_users=$(cat "$VIRTUAL_USERS" 2>/dev/null || echo "None")
             dialog --msgbox "🔸 Real Users:\n$real_users\n\n🔸 Virtual Users:\n$virtual_users" 25 60
             ;;
 
         7)
+            # Create User (Virtual or Real)
             user_type=$(dialog --clear --title "Create User" \
                 --menu "Select user type to create:" 10 50 2 \
                 1 "Virtual User" \
@@ -168,10 +186,12 @@ while true; do
                 dialog --title "Error" --msgbox "User already exists!" 6 50
             else
                 if [[ $user_type == 1 ]]; then
+                    # Create Virtual User
                     echo "$username" >> "$VIRTUAL_USERS"
                     dialog --title "Success" --msgbox "Virtual user '$username' created." 6 50
                     log_action "Created virtual user: $username"
                 elif [[ $user_type == 2 ]]; then
+                    # Create Real User (auto-delete after 5 min)
                     sudo useradd --no-user-group "$username"
                     dialog --title "Success" --msgbox "Real user '$username' created." 6 50
                     log_action "Created real user: $username"
@@ -186,6 +206,7 @@ while true; do
             ;;
 
         8)
+            # Exit the script
             clear
             echo "Exiting Group Management Tool. Bye!"
             exit 0
